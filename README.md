@@ -7,33 +7,6 @@ A complete Infrastructure as Code (IaC) solution for deploying Flask application
   <p><em>High-level AWS infrastructure architecture with ALB, Auto Scaling, and RDS</em></p>
 </div>
 
-## 🎯 What This Project Does
-
-- **Infrastructure**: Creates VPC, Auto Scaling Groups, ALB, RDS PostgreSQL database on AWS
-- **Zero-Downtime**: Application Load Balancer (ALB) + Auto Scaling Groups for rolling deployments without interruptions
-- **Dynamic Inventory**: Ansible automatically discovers instances by environment tags
-- **Environment Isolation**: Separate dev/prod deployments that never interfere with each other
-- **Deployment**: Automatically deploys Flask Docker applications with health checks
-- **Rollback**: Automatic rollback on deployment failures with container backup system
-- **Security**: Private database subnets, configurable security groups, ALB-only application access
-- **Monitoring**: CloudWatch alarms for auto-scaling based on CPU utilization
-
-## 🚀 Quick Start
-
-```bash
-# 1. Clone and setup
-git clone https://github.com/YOUR_USERNAME/aws-deployment-devops-project.git
-cd aws-deployment-devops-project
-cp .env.example .env
-# Edit .env with your AWS credentials and database password
-
-# 2. Deploy everything
-./deploy.sh dev deploy
-
-# 3. Access your application
-# URLs will be displayed after successful deployment
-```
-
 ## Table of Contents
 
 - [Prerequisites & Setup](#prerequisites--setup)
@@ -532,34 +505,6 @@ Edit Terraform files:
 - `terraform/main.tf` - Infrastructure definition
 - `terraform/variables.tf` - Add new variables
 
-## Project Structure
-
-```
-aws-deployment-devops-project/
-├── terraform/
-│   ├── main.tf                 # Infrastructure definition (VPC, ASG, ALB, RDS)
-│   ├── variables.tf            # Variable declarations
-│   ├── outputs.tf              # Output values (ALB DNS, ASG name, etc.)
-│   └── environments/
-│       ├── dev.tfvars          # Development configuration
-│       └── prod.tfvars         # Production configuration
-├── ansible/
-│   ├── ansible.cfg             # Ansible configuration
-│   ├── inventory/
-│   │   ├── aws_ec2.yml         # Dynamic EC2 inventory (optimized)
-│   │   └── hosts_generated.json # Generated inventory cache
-│   └── playbooks/
-│       ├── setup-environment.yml  # EC2 setup (Docker only, optimized)
-│       ├── deploy-app.yml         # Standard deployment with rollback
-│       ├── rollback-app.yml       # Manual rollback with backup discovery
-│       └── rolling-deploy.yml     # Zero-downtime ASG rolling deployment
-├── deploy.sh                   # Main deployment script
-├── .deployment-history.json    # Automatic deployment history tracking
-├── .env.example               # Environment variables template
-├── .gitignore                 # Git ignore file
-└── README.md                  # This documentation
-```
-
 ## Cleanup
 
 ### Destroy Environment
@@ -580,7 +525,3 @@ aws ec2 delete-key-pair --key-name myapp-prod-keypair
 # Remove local key files
 rm -f ~/.ssh/myapp-*-keypair.pem
 ```
-
----
-
-**🎉 Your AWS DevOps pipeline is ready! Deploy with confidence.**

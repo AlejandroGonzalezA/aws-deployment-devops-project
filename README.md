@@ -7,33 +7,6 @@ A complete Infrastructure as Code (IaC) solution for deploying Flask application
   <p><em>High-level AWS infrastructure architecture with ALB, Auto Scaling, and RDS</em></p>
 </div>
 
-## 🎯 What This Project Does
-
-- **Infrastructure**: Creates VPC, Auto Scaling Groups, ALB, RDS PostgreSQL database on AWS
-- **Zero-Downtime**: Application Load Balancer (ALB) + Auto Scaling Groups for rolling deployments without interruptions
-- **Dynamic Inventory**: Ansible automatically discovers instances by environment tags
-- **Environment Isolation**: Separate dev/prod deployments that never interfere with each other
-- **Deployment**: Automatically deploys Flask Docker applications with health checks
-- **Rollback**: Automatic rollback on deployment failures with container backup system
-- **Security**: Private database subnets, configurable security groups, ALB-only application access
-- **Monitoring**: CloudWatch alarms for auto-scaling based on CPU utilization
-
-## 🚀 Quick Start
-
-```bash
-# 1. Clone and setup
-git clone https://github.com/YOUR_USERNAME/aws-deployment-devops-project.git
-cd aws-deployment-devops-project
-cp .env.example .env
-# Edit .env with your AWS credentials and database password
-
-# 2. Deploy everything
-./deploy.sh dev deploy
-
-# 3. Access your application
-# URLs will be displayed after successful deployment
-```
-
 ## Table of Contents
 
 - [Prerequisites & Setup](#prerequisites--setup)
@@ -206,11 +179,27 @@ The deployment script (`./deploy.sh`) provides comprehensive deployment tracking
 
 ### Script Syntax
 ```bash
-./deploy.sh <environment> <action> [options]
+Usage: ./deploy.sh <environment> [action] [--image=IMAGE_TAG]
 
-Environments: dev, prod
-Actions: plan, apply, deploy, setup-env, deploy-app, update-app, rollback, destroy
-Options: --image=TAG (for update-app and rollback actions)
+Environment: dev, prod
+
+Actions:
+  plan         - Show terraform execution plan
+  apply        - Deploy infrastructure only (Terraform)
+  deploy       - Full deployment (Terraform + setup + application)
+  destroy      - Destroy all infrastructure
+  setup-env    - Setup environment only (Ansible)
+  deploy-app   - Deploy application only (Ansible)
+  update-app   - Update application (default: latest from tfvars, or --image=TAG)
+  rollback     - Rollback to previous version (default: last deployed, or --image=TAG)
+
+Examples:
+  ./deploy.sh dev apply                                    # Infrastructure only
+  ./deploy.sh dev deploy                                   # Full deployment
+  ./deploy.sh dev update-app                               # Update to latest (from tfvars)
+  ./deploy.sh dev update-app --image=myapp:v1.2.3          # Update to specific version
+  ./deploy.sh dev rollback                                 # Rollback to previous version
+  ./deploy.sh dev rollback --image=myapp:v1.1.0            # Rollback to specific version
 ```
 
 ### Full Deployment (Recommended)
@@ -532,34 +521,6 @@ Edit Terraform files:
 - `terraform/main.tf` - Infrastructure definition
 - `terraform/variables.tf` - Add new variables
 
-## Project Structure
-
-```
-aws-deployment-devops-project/
-├── terraform/
-│   ├── main.tf                 # Infrastructure definition (VPC, ASG, ALB, RDS)
-│   ├── variables.tf            # Variable declarations
-│   ├── outputs.tf              # Output values (ALB DNS, ASG name, etc.)
-│   └── environments/
-│       ├── dev.tfvars          # Development configuration
-│       └── prod.tfvars         # Production configuration
-├── ansible/
-│   ├── ansible.cfg             # Ansible configuration
-│   ├── inventory/
-│   │   ├── aws_ec2.yml         # Dynamic EC2 inventory (optimized)
-│   │   └── hosts_generated.json # Generated inventory cache
-│   └── playbooks/
-│       ├── setup-environment.yml  # EC2 setup (Docker only, optimized)
-│       ├── deploy-app.yml         # Standard deployment with rollback
-│       ├── rollback-app.yml       # Manual rollback with backup discovery
-│       └── rolling-deploy.yml     # Zero-downtime ASG rolling deployment
-├── deploy.sh                   # Main deployment script
-├── .deployment-history.json    # Automatic deployment history tracking
-├── .env.example               # Environment variables template
-├── .gitignore                 # Git ignore file
-└── README.md                  # This documentation
-```
-
 ## Cleanup
 
 ### Destroy Environment
@@ -580,7 +541,3 @@ aws ec2 delete-key-pair --key-name myapp-prod-keypair
 # Remove local key files
 rm -f ~/.ssh/myapp-*-keypair.pem
 ```
-
----
-
-**🎉 Your AWS DevOps pipeline is ready! Deploy with confidence.**

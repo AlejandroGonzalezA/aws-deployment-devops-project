@@ -1,0 +1,126 @@
+---
+- name: Manual Application Rollback
+  hosts: "{{ target_environment }}"
+  become: false
+  vars:
+    container_name: "myapp"
+    app_port: 5000
+    
+  tasks:
+    - name: Check current container status
+      docker_container_info:
+        name: "{{ container_name }}"
+      register: current_container
+      ignore_errors: true
+
+    - name: Find available backup containers
+      command: docker ps -a --filter "name={{ container_name }}-backup-" --format "{{ "{{" }}.Names{{ "}}" }}\t{{ "{{" }}.CreatedAt{{ "}}" }}"
+      register: backup_list
+      changed_when: false
+
+    - name: Get most recent backup
+      set_fact:
+        latest_backup: "{{ backup_list.stdout_lines | sort | last if backup_list.stdout_lines else 'None' }}"
+      when: backup_list.stdout != ""
+
+    - name: Fail if no rollback method available
+      fail:
+        msg: "No rollback method available. No backup containers found and no rollback_image specified."
+      when: rollback_image is not defined and backup_list.stdout == ""
+
+    - name: Determine rollback method
+      set_fact:
+        rollback_method: "{{ 'specific_image' if rollback_image is defined else 'backup_container' }}"
+        rollback_target: "{{ rollback_image if rollback_image is defined else latest_backup }}"
+
+    - name: Display rollback information
+      debug:
+        msg:
+          - "Current container: {{ 'Running' if current_container.exists else 'Not found' }}"
+          - "Rollback method: {{ rollback_method }}"
+          - "Rollback target: {{ rollback_target }}"
+          - "Available backups: {{ backup_list.stdout_lines | length }}"
+          - "Current image: {{ current_container.container.Config.Image if current_container.exists else 'N/A' }}"
+
+    - name: Confirm rollback
+      pause:
+        prompt: "Do you want to proceed with rollback? (yes/no)"
+      register: rollback_confirm
+
+    - name: Stop current container
+      docker_container:
+        name: "{{ container_name }}"
+        state: stopped
+      when: 
+        - rollback_confirm.user_input | lower == 'yes'
+        - current_container.exists
+
+    - name: Rename current container to failed
+      command: docker rename {{ container_name }} {{ container_name }}-failed-{{ ansible_date_time.epoch }}
+      when: 
+        - rollback_confirm.user_input | lower == 'yes'
+        - current_container.exists
+      ignore_errors: true
+
+    - name: Restore backup container (from backup)
+      command: docker rename {{ latest_backup }} {{ container_name }}
+      when: 
+        - rollback_confirm.user_input | lower == 'yes'
+        - rollback_method == 'backup_container'
+
+    - name: Deploy specific image (rollback to specific version)
+      block:
+        - name: Pull rollback Docker image
+          docker_image:
+            name: "{{ rollback_image }}"
+            source: pull
+            force_source: yes
+
+        - name: Start rollback container with specific image
+          docker_container:
+            name: "{{ container_name }}"
+            image: "{{ rollback_image }}"
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "80:{{ app_port }}"
+              - "{{ app_port }}:{{ app_port }}"
+            env:
+              PORT: "{{ app_port | string }}"
+              FLASK_ENV: "{{ flask_env }}"
+              POSTGRES_USER: "{{ db_user }}"
+              POSTGRES_PASSWORD: "{{ db_password }}"
+              POSTGRES_DB: "{{ db_name }}"
+              POSTGRES_HOST: "{{ db_host }}"
+              POSTGRES_PORT: "5432"
+      when: 
+        - rollback_confirm.user_input | lower == 'yes'
+        - rollback_method == 'specific_image'
+
+    - name: Start restored container
+      docker_container:
+        name: "{{ container_name }}"
+        state: started
+      when: rollback_confirm.user_input | lower == 'yes'
+
+    - name: Verify rollback success
+      uri:
+        url: "http://localhost:5000/health"
+        method: GET
+        status_code: [200, 301, 302]
+      register: health_check
+      when: rollback_confirm.user_input | lower == 'yes'
+      ignore_errors: true
+
+    - name: Display rollback results
+      debug:
+        msg:
+          - "ROLLBACK {{ 'SUCCESSFUL' if health_check is succeeded else 'FAILED' }}"
+          - "Application status: {{ 'HEALTHY' if health_check is succeeded else 'UNHEALTHY' }}"
+          - "Access URL: http://{{ ansible_default_ipv4.address }}:5000"
+      when: rollback_confirm.user_input | lower == 'yes'
+
+    - name: Rollback cancelled
+      debug:
+        msg: "Rollback cancelled by user."
+      when: rollback_confirm.user_input | lower != 'yes'

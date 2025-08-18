@@ -1,0 +1,41 @@
+{
+  "dev": {
+    "current": "alexg18/flask-app-devops-project_app:develop",
+    "previous": "alexg18/flask-app-devops-project_app:v1.1.0",
+    "last_deployment": "2025-08-14T20:30:15Z",
+    "deployments": [
+      {
+        "image": "alexg18/flask-app-devops-project_app:v1.0.0",
+        "timestamp": "2025-08-14T18:00:00Z",
+        "action": "deploy"
+      },
+      {
+        "image": "alexg18/flask-app-devops-project_app:v1.1.0",
+        "timestamp": "2025-08-14T19:15:30Z",
+        "action": "deploy"
+      },
+      {
+        "image": "alexg18/flask-app-devops-project_app:develop",
+        "timestamp": "2025-08-14T20:30:15Z",
+        "action": "deploy"
+      }
+    ]
+  },
+  "prod": {
+    "current": "alexg18/flask-app-devops-project_app:v1.1.0",
+    "previous": "alexg18/flask-app-devops-project_app:v1.0.0",
+    "last_deployment": "2025-08-14T20:00:00Z",
+    "deployments": [
+      {
+        "image": "alexg18/flask-app-devops-project_app:v1.0.0",
+        "timestamp": "2025-08-14T18:30:00Z",
+        "action": "deploy"
+      },
+      {
+        "image": "alexg18/flask-app-devops-project_app:v1.1.0",
+        "timestamp": "2025-08-14T20:00:00Z",
+        "action": "deploy"
+      }
+    ]
+  }
+}

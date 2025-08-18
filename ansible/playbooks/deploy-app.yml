@@ -1,0 +1,150 @@
+---
+- name: Deploy Application
+  hosts: "{{ target_environment }}"
+  become: false
+  vars:
+    # Required variables (passed via extra-vars)
+    app_port: "{{ app_port }}"
+    flask_env: "{{ flask_env }}"
+    container_name: myapp
+    
+    # Docker configuration
+    docker_image: "{{ docker_image }}"
+    
+    # Health check configuration  
+    health_check_retries: 5
+    health_check_delay: 10
+    health_check_timeout: 60
+    
+    # Database configuration
+    db_name: "{{ db_name }}"
+    db_user: "{{ db_user }}"
+    db_host: "{{ db_host }}"
+    db_password: "{{ db_password }}"
+    postgres_port: 5432
+    
+  tasks:
+    # Validate required variables
+    - name: Validate required variables
+      fail:
+        msg: "Required variable {{ item }} is not defined"
+      when: item not in vars or vars[item] == "" or vars[item] is undefined
+      loop:
+        - docker_image
+        - app_port
+        - flask_env
+        - db_host
+        - db_name
+        - db_user
+        - db_password
+
+    - name: Get current container info for backup
+      docker_container_info:
+        name: "{{ container_name }}"
+      register: current_container
+      ignore_errors: true
+
+    - name: Pull new Docker image
+      docker_image:
+        name: "{{ docker_image }}"
+        source: pull
+        force_source: yes
+
+    - name: Create backup of current container (for rollback)
+      command: docker rename {{ container_name }} {{ container_name }}-backup-{{ ansible_date_time.epoch }}
+      when: current_container.exists and current_container.container.State.Status == "running"
+      ignore_errors: true
+
+    - name: Start new application container
+      docker_container:
+        name: "{{ container_name }}"
+        image: "{{ docker_image }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "80:{{ app_port }}"
+          - "{{ app_port }}:{{ app_port }}"
+        env:
+          PORT: "{{ app_port | string }}"
+          FLASK_ENV: "{{ flask_env }}"
+          POSTGRES_USER: "{{ db_user }}"
+          POSTGRES_PASSWORD: "{{ db_password }}"
+          POSTGRES_DB: "{{ db_name }}"
+          POSTGRES_HOST: "{{ db_host }}"
+          POSTGRES_PORT: "{{ postgres_port | string }}"
+
+    - name: Wait for container to be ready
+      wait_for:
+        port: "{{ app_port }}"
+        host: localhost
+        timeout: "{{ health_check_timeout }}"
+      ignore_errors: true
+
+    - name: Verify application is responding
+      uri:
+        url: "http://localhost:{{ app_port }}/health"
+        method: GET
+        status_code: [200, 301, 302]
+      register: app_health
+      ignore_errors: true
+      retries: "{{ health_check_retries }}"
+      delay: "{{ health_check_delay }}"
+
+    - name: Get final container status
+      docker_container_info:
+        name: "{{ container_name }}"
+      register: final_container_info
+
+    - name: Display deployment results
+      debug:
+        msg:
+          - "Container Status: {{ final_container_info.container.State.Status }}"
+          - "Image Deployed: {{ docker_image }}"
+          - "Application Health Check: {{ 'PASSED' if app_health is succeeded else 'FAILED' }}"
+          - "Access URL: http://{{ ansible_default_ipv4.address }}:{{ app_port }}"
+
+    - name: Show recent container logs
+      command: docker logs --tail=20 {{ container_name }}
+      register: container_logs
+      changed_when: false
+
+    - name: Display recent logs
+      debug:
+        msg: "{{ container_logs.stdout_lines }}"
+
+    # Automatic rollback on failure
+    - name: Rollback on deployment failure
+      block:
+        - name: Stop failed container
+          docker_container:
+            name: "{{ container_name }}"
+            state: stopped
+          ignore_errors: true
+
+        - name: Remove failed container
+          docker_container:
+            name: "{{ container_name }}"
+            state: absent
+          ignore_errors: true
+
+        - name: Check for backup container
+          command: docker ps -a --filter "name={{ container_name }}-backup-" --format "{{ "{{" }}.Names{{ "}}" }}"
+          register: backup_containers
+
+        - name: Restore from backup
+          command: |
+            BACKUP_NAME=$(echo "{{ backup_containers.stdout }}" | head -1)
+            if [ ! -z "$BACKUP_NAME" ]; then
+              docker rename "$BACKUP_NAME" {{ container_name }}
+              docker start {{ container_name }}
+              echo "Rollback completed: restored $BACKUP_NAME"
+            else
+              echo "No backup found for rollback"
+            fi
+          when: backup_containers.stdout != ""
+
+        - name: Fail deployment with rollback info
+          fail:
+            msg: "Deployment failed. {{ 'Automatic rollback completed.' if backup_containers.stdout != '' else 'No backup available for rollback.' }}"
+
+      when: app_health is failed

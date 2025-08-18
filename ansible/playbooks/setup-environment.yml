@@ -1,0 +1,139 @@
+---
+# Playbook to setup complete environment from bare EC2 instance
+
+- name: Complete Environment Setup from Bare EC2
+  hosts: "{{ target_environment }}"
+  become: true
+  vars:
+    docker_compose_version: "2.24.0"
+    
+  tasks:
+    - name: Gather EC2 metadata facts
+      setup:
+        gather_subset:
+          - '!all'
+          - '!min'
+          - hardware
+          - network
+          - virtual
+      tags: facts
+      
+    - name: Display instance information
+      debug:
+        msg:
+          - "Setting up: {{ inventory_hostname }}"
+          - "Environment: {{ aws_environment | default('unknown') }}"
+          - "Project: {{ aws_project | default('unknown') }}"
+          - "Public IP: {{ ansible_host }}"
+
+    - name: Update system packages
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+
+    - name: Install essential packages
+      yum:
+        name:
+          - python3
+          - python3-pip
+          - git
+          - htop
+          - wget
+          - unzip
+          - nc
+          - vim
+          - tree
+        state: present
+
+    - name: Ensure Python3 is the default python (for compatibility)
+      alternatives:
+        name: python
+        path: /usr/bin/python3
+        link: /usr/bin/python
+        priority: 1
+
+    - name: Install Docker
+      yum:
+        name: docker
+        state: present
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add ec2-user to docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+
+
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Create application directory
+      file:
+        path: /opt/app
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+      retries: 3
+      delay: 5
+
+    - name: Reset SSH connection after Docker installation
+      meta: reset_connection
+
+    - name: Create bootstrap completion marker
+      copy:
+        content: |
+          {
+            "bootstrap_completed": "{{ ansible_date_time.iso8601 }}",
+            "hostname": "{{ inventory_hostname }}",
+            "ansible_managed": true,
+            "packages_installed": ["docker", "docker-compose", "python3"],
+            "directories_created": ["/opt/app"]
+          }
+        dest: /opt/app/bootstrap-status.json
+        owner: ec2-user
+        group: ec2-user
+        mode: '0644'
+
+    - name: Verify all installations
+      block:
+        - name: Check Docker version
+          command: docker --version
+          register: docker_version
+          changed_when: false
+
+        - name: Check Docker Compose version
+          command: docker-compose --version
+          register: compose_version
+          changed_when: false
+
+
+
+        - name: Check Python version
+          command: python --version
+          register: python_version
+          changed_when: false
+
+    - name: Display installation results
+      debug:
+        msg:
+          - "🎉 Complete environment setup finished!"
+          - "🐳 {{ docker_version.stdout }}"
+          - "🐳 {{ compose_version.stdout }}"
+          - "🐍 {{ python_version.stdout }}"
+          - "📁 Application directory: /opt/app"
+          - "✅ Ready for application deployment!"
+
+    - name: Reset SSH connection to allow user to use docker without sudo
+      meta: reset_connection

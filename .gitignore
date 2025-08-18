@@ -1,0 +1,75 @@
+# Deployment history and state
+.deployment-history.json
+
+# Ansible inventory generation
+**/hosts_generated.json
+
+# Terraform files
+**/.terraform/
+**/.terraform.lock.hcl
+**/.terraform.tfstate.lock.info
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/terraform.tfplan
+**/terraform.tfplan.*
+**/.terraformrc
+**/terraform.rc
+**/crash.log
+
+# Environment variables
+.env*
+!.env.example
+
+# AWS credentials and configuration
+.aws/
+**/aws-credentials
+**/.aws-credentials
+**/credentials
+**/.credentials
+
+# SSH Keys
+*.pem
+*.ppk
+**/id_rsa*
+**/id_ed25519*
+**/id_dsa*
+**/*.key
+
+# Logs
+*.log
+**/logs/
+**/log/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Certificate files
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# Configuration files that might contain secrets
+config.json
+secrets.json
+.secrets
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*~

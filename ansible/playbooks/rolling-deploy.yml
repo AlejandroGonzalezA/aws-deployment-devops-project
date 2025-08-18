@@ -1,0 +1,79 @@
+---
+- name: Zero Downtime Rolling Deployment
+  hosts: localhost
+  gather_facts: false
+  vars:
+    asg_name: "{{ asg_name }}"
+    docker_image: "{{ docker_image }}"
+    
+  tasks:
+    - name: Validate required variables
+      fail:
+        msg: "Required variable {{ item }} is not defined"
+      when: item not in vars or vars[item] == "" or vars[item] is undefined
+      loop:
+        - asg_name
+        - docker_image
+
+    - name: Update Launch Template with new Docker image
+      amazon.aws.ec2_launch_template:
+        name: "{{ asg_name }}-lt"
+        state: present
+        image_id: "{{ ansible_ec2_ami_id | default(lookup('aws_ec2_ami_info', owners=['amazon'], filters={'name': ['al2023-ami-*-x86_64']}, most_recent=true).images[0].image_id) }}"
+        instance_type: "t3.micro"
+        key_name: "{{ key_pair_name }}"
+        security_group_ids: "{{ security_group_ids }}"
+        user_data: |
+          #!/bin/bash
+          # Install Docker
+          yum update -y
+          yum install -y docker
+          systemctl start docker
+          systemctl enable docker
+          usermod -aG docker ec2-user
+          
+          # Pull and run new image
+          docker pull {{ docker_image }}
+          docker run -d --name myapp --restart unless-stopped \
+            -p 80:5000 -p 5000:5000 \
+            -e PORT=5000 \
+            -e FLASK_ENV={{ flask_env }} \
+            -e POSTGRES_USER={{ db_user }} \
+            -e POSTGRES_PASSWORD={{ db_password }} \
+            -e POSTGRES_DB={{ db_name }} \
+            -e POSTGRES_HOST={{ db_host }} \
+            -e POSTGRES_PORT=5432 \
+            {{ docker_image }}
+
+    - name: Start ASG Instance Refresh for Zero Downtime Deployment
+      amazon.aws.autoscaling_group:
+        name: "{{ asg_name }}"
+        state: present
+        instance_refresh:
+          strategy: Rolling
+          preferences:
+            min_healthy_percentage: 50
+            instance_warmup: 300
+            checkpoint_percentages: [20, 50, 100]
+            checkpoint_delay: 600
+
+    - name: Monitor Instance Refresh Progress
+      amazon.aws.autoscaling_group_info:
+        name: "{{ asg_name }}"
+      register: asg_info
+      until: asg_info.results[0].instance_refresh[0].status in ['Successful', 'Failed', 'Cancelled']
+      retries: 60
+      delay: 30
+
+    - name: Display deployment results
+      debug:
+        msg:
+          - "Instance Refresh Status: {{ asg_info.results[0].instance_refresh[0].status }}"
+          - "Deployment: {{ 'SUCCESSFUL' if asg_info.results[0].instance_refresh[0].status == 'Successful' else 'FAILED' }}"
+          - "Zero Downtime: ✅ Traffic maintained through ALB during rolling update"
+          - "New Image: {{ docker_image }}"
+
+    - name: Fail if deployment unsuccessful
+      fail:
+        msg: "Zero downtime deployment failed: {{ asg_info.results[0].instance_refresh[0].status }}"
+      when: asg_info.results[0].instance_refresh[0].status != 'Successful'

@@ -1,0 +1,66 @@
+plugin: aws_ec2
+regions:
+  - us-east-1
+
+# Group instances by environment and project
+keyed_groups:
+  - key: tags.Environment
+    prefix: env_
+    separator: ""
+  - key: tags.Project
+    prefix: project_
+  - key: tags.Environment + "_" + tags.Project
+    prefix: ""
+    separator: ""
+
+# Only include running instances
+filters:
+  instance-state-name: running
+  
+# Use public IP for connection and set common variables
+compose:
+  ansible_host: public_ip_address
+  ansible_user: ec2-user
+  aws_environment: tags.Environment
+  aws_project: tags.Project
+
+hostnames:
+  - tag:Name
+  - instance-id
+
+# Exclude unnecessary metadata from hostvars
+exclude_hostvars_keys:
+  - ami_launch_index
+  - architecture
+  - block_device_mappings
+  - boot_mode
+  - capacity_reservation_specification
+  - client_token
+  - cpu_options
+  - current_instance_boot_mode
+  - ebs_optimized
+  - ena_support
+  - enclave_options
+  - hibernation_options
+  - hypervisor
+  - maintenance_options
+  - metadata_options
+  - monitoring
+  - network_interfaces
+  - network_performance_options
+  - operator
+  - owner_id
+  - placement
+  - platform_details
+  - private_dns_name_options
+  - product_codes
+  - requester_id
+  - reservation_id
+  - root_device_name
+  - root_device_type
+  - security_groups
+  - source_dest_check
+  - state_transition_reason
+  - usage_operation
+  - usage_operation_update_time
+  - virtualization_type

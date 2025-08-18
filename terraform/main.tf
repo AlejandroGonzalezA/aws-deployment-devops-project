@@ -236,7 +236,7 @@ resource "aws_lb" "main" {
 
 # Target Group for the application
 resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-web-target-group"
+  name     = "${local.name_prefix}-app-tg"
   port     = 5000
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -253,7 +253,7 @@ resource "aws_lb_target_group" "app" {
     protocol            = "HTTP"
   }
 
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-web-target-group" })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-app-tg" })
 }
 
 # ALB Listener for HTTP traffic

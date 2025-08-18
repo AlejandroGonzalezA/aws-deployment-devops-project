@@ -179,11 +179,27 @@ The deployment script (`./deploy.sh`) provides comprehensive deployment tracking
 
 ### Script Syntax
 ```bash
-./deploy.sh <environment> <action> [options]
+Usage: ./deploy.sh <environment> [action] [--image=IMAGE_TAG]
 
-Environments: dev, prod
-Actions: plan, apply, deploy, setup-env, deploy-app, update-app, rollback, destroy
-Options: --image=TAG (for update-app and rollback actions)
+Environment: dev, prod
+
+Actions:
+  plan         - Show terraform execution plan
+  apply        - Deploy infrastructure only (Terraform)
+  deploy       - Full deployment (Terraform + setup + application)
+  destroy      - Destroy all infrastructure
+  setup-env    - Setup environment only (Ansible)
+  deploy-app   - Deploy application only (Ansible)
+  update-app   - Update application (default: latest from tfvars, or --image=TAG)
+  rollback     - Rollback to previous version (default: last deployed, or --image=TAG)
+
+Examples:
+  ./deploy.sh dev apply                                    # Infrastructure only
+  ./deploy.sh dev deploy                                   # Full deployment
+  ./deploy.sh dev update-app                               # Update to latest (from tfvars)
+  ./deploy.sh dev update-app --image=myapp:v1.2.3          # Update to specific version
+  ./deploy.sh dev rollback                                 # Rollback to previous version
+  ./deploy.sh dev rollback --image=myapp:v1.1.0            # Rollback to specific version
 ```
 
 ### Full Deployment (Recommended)

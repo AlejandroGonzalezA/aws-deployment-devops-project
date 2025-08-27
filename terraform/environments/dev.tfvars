@@ -24,3 +24,12 @@ max_instances              = 4
 desired_instances          = 2
 scale_up_cpu_threshold     = 70
 scale_down_cpu_threshold   = 30
+
+# Storage Configuration
+root_volume_size = 30  # Increased from default 8GB to 30GB for Docker images/containers
+
+# Health Check Configuration - More lenient for dev environment
+health_check_grace_period        = 600   # 10 minutes grace period
+health_check_timeout             = 15    # 15 seconds timeout (longer for dev)
+health_check_interval            = 60    # Check every 60 seconds
+health_check_unhealthy_threshold = 3     # 3 failed checks before unhealthy

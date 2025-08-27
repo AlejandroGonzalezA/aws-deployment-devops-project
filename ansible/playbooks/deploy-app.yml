@@ -38,40 +38,85 @@
         - db_user
         - db_password
 
+    # Verify Docker is working
+    - name: Check if Docker is installed
+      command: which docker
+      register: docker_installed
+      changed_when: false
+      ignore_errors: true
+
+    - name: Fail if Docker is not installed
+      fail:
+        msg: |
+          Docker is not installed on this instance. 
+          Please run the setup-environment playbook first:
+          ./deploy.sh dev setup-env
+      when: docker_installed.rc != 0
+
+    - name: Check Docker service status
+      command: systemctl is-active docker
+      register: docker_status
+      become: true
+      changed_when: false
+      ignore_errors: true
+
+    - name: Start Docker service if not running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      become: true
+      when: docker_status.stdout != "active"
+
+    - name: Verify Docker daemon is accessible
+      command: docker version
+      register: docker_version_check
+      changed_when: false
+      retries: 3
+      delay: 5
+
     - name: Get current container info for backup
-      docker_container_info:
-        name: "{{ container_name }}"
-      register: current_container
+      command: docker ps -a --filter "name={{ container_name }}" --format "{{ "{{" }}.Names{{ "}}" }}"
+      register: current_container_check
+      changed_when: false
       ignore_errors: true
 
     - name: Pull new Docker image
-      docker_image:
-        name: "{{ docker_image }}"
-        source: pull
-        force_source: yes
+      command: docker pull {{ docker_image }}
+      register: docker_pull_result
+      changed_when: "'Downloaded newer image' in docker_pull_result.stdout or 'Status: Image is up to date' not in docker_pull_result.stdout"
 
     - name: Create backup of current container (for rollback)
       command: docker rename {{ container_name }} {{ container_name }}-backup-{{ ansible_date_time.epoch }}
-      when: current_container.exists and current_container.container.State.Status == "running"
+      when: current_container_check.stdout != ""
+      ignore_errors: true
+
+    - name: Stop existing container
+      command: docker stop {{ container_name }}
+      when: current_container_check.stdout != ""
+      ignore_errors: true
+
+    - name: Remove existing container
+      command: docker rm {{ container_name }}
+      when: current_container_check.stdout != ""
       ignore_errors: true
 
     - name: Start new application container
-      docker_container:
-        name: "{{ container_name }}"
-        image: "{{ docker_image }}"
-        state: started
-        restart_policy: unless-stopped
-        ports:
-          - "80:{{ app_port }}"
-          - "{{ app_port }}:{{ app_port }}"
-        env:
-          PORT: "{{ app_port | string }}"
-          FLASK_ENV: "{{ flask_env }}"
-          POSTGRES_USER: "{{ db_user }}"
-          POSTGRES_PASSWORD: "{{ db_password }}"
-          POSTGRES_DB: "{{ db_name }}"
-          POSTGRES_HOST: "{{ db_host }}"
-          POSTGRES_PORT: "{{ postgres_port | string }}"
+      command: >
+        docker run -d
+        --name {{ container_name }}
+        --restart unless-stopped
+        -p 80:{{ app_port }}
+        -p {{ app_port }}:{{ app_port }}
+        -e PORT={{ app_port }}
+        -e FLASK_ENV={{ flask_env }}
+        -e POSTGRES_USER={{ db_user }}
+        -e POSTGRES_PASSWORD={{ db_password }}
+        -e POSTGRES_DB={{ db_name }}
+        -e POSTGRES_HOST={{ db_host }}
+        -e POSTGRES_PORT={{ postgres_port }}
+        {{ docker_image }}
+      register: container_start_result
 
     - name: Wait for container to be ready
       wait_for:
@@ -81,26 +126,29 @@
       ignore_errors: true
 
     - name: Verify application is responding
-      uri:
-        url: "http://localhost:{{ app_port }}/health"
-        method: GET
-        status_code: [200, 301, 302]
-      register: app_health
+      command: curl -f -s -o /dev/null -w "%{http_code}" http://localhost:{{ app_port }}/health
+      register: app_health_check
       ignore_errors: true
       retries: "{{ health_check_retries }}"
       delay: "{{ health_check_delay }}"
+      until: app_health_check.stdout == "200"
+
+    - name: Set health check result
+      set_fact:
+        app_health: "{{ app_health_check }}"
 
     - name: Get final container status
-      docker_container_info:
-        name: "{{ container_name }}"
-      register: final_container_info
+      command: docker ps --filter "name={{ container_name }}" --format "{{ "{{" }}.Status{{ "}}" }}"
+      register: final_container_status
+      changed_when: false
 
     - name: Display deployment results
       debug:
         msg:
-          - "Container Status: {{ final_container_info.container.State.Status }}"
+          - "Container Status: {{ final_container_status.stdout }}"
           - "Image Deployed: {{ docker_image }}"
-          - "Application Health Check: {{ 'PASSED' if app_health is succeeded else 'FAILED' }}"
+          - "Application Health Check: {{ 'PASSED' if app_health_check.stdout == '200' else 'FAILED' }}"
+          - "Health Check Response Code: {{ app_health_check.stdout | default('N/A') }}"
           - "Access URL: http://{{ ansible_default_ipv4.address }}:{{ app_port }}"
 
     - name: Show recent container logs
@@ -116,20 +164,17 @@
     - name: Rollback on deployment failure
       block:
         - name: Stop failed container
-          docker_container:
-            name: "{{ container_name }}"
-            state: stopped
+          command: docker stop {{ container_name }}
           ignore_errors: true
 
         - name: Remove failed container
-          docker_container:
-            name: "{{ container_name }}"
-            state: absent
+          command: docker rm {{ container_name }}
           ignore_errors: true
 
         - name: Check for backup container
           command: docker ps -a --filter "name={{ container_name }}-backup-" --format "{{ "{{" }}.Names{{ "}}" }}"
           register: backup_containers
+          changed_when: false
 
         - name: Restore from backup
           command: |
@@ -142,9 +187,10 @@
               echo "No backup found for rollback"
             fi
           when: backup_containers.stdout != ""
+          register: rollback_result
 
         - name: Fail deployment with rollback info
           fail:
             msg: "Deployment failed. {{ 'Automatic rollback completed.' if backup_containers.stdout != '' else 'No backup available for rollback.' }}"
 
-      when: app_health is failed
+      when: app_health_check.stdout != "200"

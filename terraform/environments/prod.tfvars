@@ -24,3 +24,12 @@ max_instances              = 10
 desired_instances          = 3
 scale_up_cpu_threshold     = 65
 scale_down_cpu_threshold   = 25
+
+# Storage Configuration
+root_volume_size = 50  # Larger disk space for production workloads
+
+# Health Check Configuration - Stricter for production
+health_check_grace_period        = 300   # 5 minutes grace period
+health_check_timeout             = 10    # 10 seconds timeout
+health_check_interval            = 30    # Check every 30 seconds
+health_check_unhealthy_threshold = 2     # 2 failed checks before unhealthy

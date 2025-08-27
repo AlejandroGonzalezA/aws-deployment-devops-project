@@ -108,3 +108,39 @@ variable "scale_down_cpu_threshold" {
   type        = number
   default     = 30
 }
+
+# Storage Configuration
+variable "root_volume_size" {
+  description = "Root volume size in GB for EC2 instances"
+  type        = number
+  default     = 20
+  validation {
+    condition     = var.root_volume_size >= 8 && var.root_volume_size <= 100
+    error_message = "Root volume size must be between 8 and 100 GB."
+  }
+}
+
+# Health Check Configuration
+variable "health_check_grace_period" {
+  description = "Time (in seconds) after instance launch before health checks start"
+  type        = number
+  default     = 600
+}
+
+variable "health_check_timeout" {
+  description = "Time (in seconds) to wait for health check response"
+  type        = number
+  default     = 10
+}
+
+variable "health_check_interval" {
+  description = "Time (in seconds) between health checks"
+  type        = number
+  default     = 60
+}
+
+variable "health_check_unhealthy_threshold" {
+  description = "Number of consecutive failed health checks before marking unhealthy"
+  type        = number
+  default     = 3
+}

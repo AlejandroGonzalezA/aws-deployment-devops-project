@@ -244,9 +244,9 @@ resource "aws_lb_target_group" "app" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
+    unhealthy_threshold = var.health_check_unhealthy_threshold
+    timeout             = var.health_check_timeout
+    interval            = var.health_check_interval
     path                = "/health"
     matcher             = "200"
     port                = "traffic-port"
@@ -329,6 +329,17 @@ resource "aws_launch_template" "app" {
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
+  # Increase root volume size for Docker images and containers
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size = var.root_volume_size
+      volume_type = "gp3"
+      encrypted   = true
+      delete_on_termination = true
+    }
+  }
+
   # Configuration handled by Ansible
 
   tag_specifications {
@@ -349,7 +360,7 @@ resource "aws_autoscaling_group" "app" {
   vpc_zone_identifier = [aws_subnet.public.id, aws_subnet.public_2.id]
   target_group_arns   = [aws_lb_target_group.app.arn]
   health_check_type   = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = var.health_check_grace_period
 
   min_size         = var.min_instances
   max_size         = var.max_instances

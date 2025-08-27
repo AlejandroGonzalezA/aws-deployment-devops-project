@@ -317,7 +317,7 @@ case $ACTION in
         # Get database configuration from Terraform outputs
         DB_HOST=$(terraform output -raw rds_address 2>/dev/null || echo "localhost")
         DB_USER="postgres"
-        DB_NAME="myapp"
+        DB_NAME="flaskwebapp"
         
         # Database password from environment variable
         DB_PASSWORD="$TF_VAR_db_password"
@@ -368,7 +368,7 @@ case $ACTION in
         # Get database configuration from Terraform outputs
         DB_HOST=$(terraform output -raw rds_address 2>/dev/null || echo "localhost")
         DB_USER="postgres"
-        DB_NAME="myapp"
+        DB_NAME="flaskwebapp"
         DB_PASSWORD="$TF_VAR_db_password"
         
         # Get ALB DNS
@@ -401,7 +401,7 @@ case $ACTION in
         # Get database configuration from Terraform outputs
         DB_HOST=$(terraform output -raw rds_address 2>/dev/null || echo "localhost")
         DB_USER="postgres"
-        DB_NAME="myapp"
+        DB_NAME="flaskwebapp"
         DB_PASSWORD="$TF_VAR_db_password"
         
         # Get ALB DNS
@@ -434,7 +434,7 @@ case $ACTION in
         # Get database configuration from Terraform outputs
         DB_HOST=$(terraform output -raw rds_address 2>/dev/null || echo "localhost")
         DB_USER="postgres"
-        DB_NAME="myapp"
+        DB_NAME="flaskwebapp"
         DB_PASSWORD="$TF_VAR_db_password"
         
         # Get ALB DNS
